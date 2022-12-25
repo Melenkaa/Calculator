@@ -2,7 +2,7 @@
 
 QVector<char> alphabet = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'};
 
-#define myVariant "01234567"//"BGHEADCF"
+#define myVariant "01234567"//        "BGHEADCF"
 
 QFont titleFont("Times New Roman", 30);
 QFont mediumFont("Times New Roman", 20);
@@ -163,7 +163,7 @@ void MainWindow::displayKeyboard() {
 QString MainWindow::sumResult(QVector<QString> additives, QVector<QChar> split) { //vector of additives, ex: ADDDE FGHE HGB A
     //This is a recursive function that returns the result of sum of all elements in additives
     if (additives.size() == 1){ //If only one element exists => it is the answer
-        if (!additives.front().contains("×"))
+        if (!additives.front().contains("×") && !additives.front().contains("÷"))
             return additives.front();
         else
             return multResult(additives.front());
@@ -206,9 +206,9 @@ QString MainWindow::sumResult(QVector<QString> additives, QVector<QChar> split) 
     QString second = additives.back();
 
     //check if first or second contain multiplication sign
-    if (first.contains("\u00d7"))
+    if (first.contains("\u00d7") || first.contains("\u00f7"))
         first = multResult(first);
-    if (second.contains("\u00d7"))
+    if (second.contains("\u00d7") || second.contains("\u00f7"))
         second = multResult(second);
 
     //append the result of sum of two last elements to the array:
@@ -260,11 +260,15 @@ QString MainWindow::addTwo(const QString &firstAdd, const QString &secondAdd) {
             result += QString(add->at(carree, first.at(i)));
             carree = sumCarry[order.find(first.at(index))][order.find(carree)];
         }
+        if (carree != order.front())
+            result += carree;
     } else {
         for(int i = index; i < second.size(); i++){
             result += QString(add->at(carree, second.at(i)));
             carree = sumCarry[order.find(second.at(index))][order.find(carree)];
         }
+        if (carree != order.front())
+            result += carree;
     }
 
     std::reverse(result.begin(), result.end()); //Since we reversed the numbers and calculated the sum in reverse, we need to reverse it back
@@ -324,8 +328,9 @@ QString MainWindow::substractTwo(const QString &firstSub, const QString &secondS
     }
 
     //delete zeros at the beginning (remember the result is reversed, so the beginning of the number is at the end of QString)
-    while (result.back() == order.front())
-        result.chop(1);
+    if (result != QString(order.front()))
+        while (result.back() == order.front())
+            result.chop(1);
 
     if (isResultNegative)
         result += "-";
@@ -343,7 +348,7 @@ QString MainWindow::multResult(const QString &expression) { //expression can hav
 
     QString tmp = "";
     for(auto& c : expression){
-        if (c == "\u00d7"){
+        if ((c == "\u00d7") || (c == "\u00f7")){
             splits.append(c);
             multiplees.append(tmp);
             tmp = "";
@@ -358,8 +363,29 @@ QString MainWindow::multResult(const QString &expression) { //expression can hav
     if(multiplees.size() == 1) //if there are no * or / => expression = answer
         return expression;
 
-    QString first = multiplees[multiplees.size() - 2];
-    QString second = multiplees.back();
+    QString first = multiplees.front();
+    QString second = multiplees[1];
+
+    //we are going to multiply from left to right, so the operands are always 1st and 2nd elements of the array.
+    QString newExpression = "";
+    if (splits.front() == "\u00d7") // u00d7 is unicode for ×. If thats the symbol => we multiply
+        newExpression = multiply(first, second);
+    else //else we divide
+        newExpression = divide(first, second);
+
+    //creating the new expression:  Before: 111 * 222 / 33 * 444
+    //                              After: 333 / 33 * 444
+    for(int i = 1; i < splits.size(); i++){
+        newExpression += splits[i];
+        newExpression += multiplees[i + 1];
+    }
+
+    return multResult(newExpression);
+}
+
+QString MainWindow::multiply(const QString &firstM, const QString &secondM) {
+    QString first = firstM;
+    QString second = secondM;
 
     std::reverse(first.begin(), first.end());
     std::reverse(second.begin(), second.end());
@@ -415,20 +441,25 @@ QString MainWindow::multResult(const QString &expression) { //expression can hav
         }
     }
 
-    //Now we need to find the sum of numbers in our vector.
-    //Since function sumResult takes two vectors as arguments, we need to create a vector of splits (in our case it is just a vector of [SIZE - 1] pluses)
     QVector<QChar> temp;
     temp.fill('+', resultsOfMultiplication.size() - 1);
 
-    //Now we need to call THIS function again, passing it the newExpression, which has the calculated result of last two numbers' multiplication
-    QString newExpression = "";
-    for(int i = 0; i < multiplees.size() - 2; i++){
-        newExpression += multiplees[i];
-        newExpression += splits[i];
-    }
-    newExpression += sumResult(resultsOfMultiplication, temp);
+    return sumResult(resultsOfMultiplication, temp); //result of multiplication is the result of the sum
+}
 
-    return multResult(newExpression);
+QString MainWindow::divide(const QString &dividend, const QString &divider) {
+    QString result = order.front();
+    QString div = dividend;
+    //The result of division is going to be calculated by continiously subtracting divider from dividend
+    //                                                  and keeping track of the amount of subtractions
+    while (substractTwo(div, divider).front() != '-'){
+        result = addTwo(result, order.at(1));
+        div = substractTwo(div, divider);
+    }
+    //if we divide with remainder AND the remainder is not 0 => display "AAA + B in remainder."
+    if (divideWithRemainder && (div != QString(order.front())))
+        result += QString(" + " + div + " in remainder.");
+    return result;
 }
 
 //--------------------------------------------------------------------------SLOTS-----------------------------------------------------------
@@ -481,6 +512,9 @@ void MainWindow::displayAnswer() {
     if ((userInput->toPlainText().back() == '+') || (userInput->toPlainText().back() == '-') ||\
             (userInput->toPlainText().endsWith("×")) || (userInput->toPlainText().endsWith("÷"))) //expression ends with an operator sign => do nothing
         return;
+    //if the expression contains division by zero => do nothing.
+    if (answer->toPlainText() == "= Error: Division by Zero.")
+        return;
 
     QVector<QString> additives;
     QVector<QChar> splits;
@@ -498,15 +532,35 @@ void MainWindow::displayAnswer() {
     }
     additives.append(entry);
 
+    if ((splits.size() == 0) && (entry.count("\u00f7") == 1) && (entry.count("\u00d7") == 0))
+        divideWithRemainder = true;
+
     answer->setPlainText("=" + sumResult(additives, splits));
+    divideWithRemainder = false;
     connect(pasteAnswer, SIGNAL(clicked()), this, SLOT(useAnswer()));
     return;
 }
 
 void MainWindow::useAnswer() {
     QString ans = "";
-    for(int i = 1; i < answer->toPlainText().size(); i++)
-        ans += answer->toPlainText().at(i);
+
+    //if expression contains division by zero => do nothing
+    if (answer->toPlainText() == "= Error: Division by Zero.")
+        return;
+
+    // Check if the last action was division with remainder => then we use only the integer part of the answer.
+    //ex.   answer:         =45 + 4 in remainder.       New expression = 45.
+    if (answer->toPlainText().contains(" in remainder.")){
+        int i = 1;
+        while (answer->toPlainText().at(i) != ' '){
+            ans += answer->toPlainText().at(i);
+            i += 1;
+        }
+    }
+    else
+        for(int i = 1; i < answer->toPlainText().size(); i++)
+            ans += answer->toPlainText().at(i);
+
     setExpression(userInput, ans);
     answer->setPlainText("=");
     disconnect(pasteAnswer, 0, 0, 0);
@@ -530,6 +584,20 @@ void MainWindow::addSymbol() {
     Button* sender = qobject_cast<Button*>(QObject::sender());
     QString previous = userInput->toPlainText(); //current expression
     QString symbol = sender->getText()->toPlainText(); //symbol we want to add
+
+    //if we add a zero after division sign => display error message
+    if ((userInput->toPlainText().back() == "÷") && (symbol == order.front())){
+        userInput->setPlainText(userInput->toPlainText() + symbol);
+        answer->setPlainText("= Error: Division by Zero.");
+        userInput->setFont(titleFont);
+        setExpression(userInput, userInput->toPlainText());
+        return;
+    }
+
+    //if expression contains division by zero => do nothing.
+    if (userInput->toPlainText().contains(QString("÷") + order.front()))
+        return;
+
     if(userInput->toPlainText() == QString("Enter the expression...")){
         if ((symbol == "+") || (symbol == "-") || (symbol == "×") || (symbol == "÷"))
             return; //we don't add + - × or ÷ to an empty expression
@@ -537,11 +605,18 @@ void MainWindow::addSymbol() {
         answer->setPlainText("=");
     } else {
         if ((symbol == "+") || (symbol == "-") || (symbol == "×") || (symbol == "÷")){
-            if ((userInput->toPlainText().back() == "+") || (userInput->toPlainText().back() == "-") || (userInput->toPlainText().back() == "×") || (userInput->toPlainText().back() == "÷"))
+            if((userInput->toPlainText().back() == "+") || (userInput->toPlainText().back() == "-") || (userInput->toPlainText().back() == "×") || (userInput->toPlainText().back() == "÷"))
                 return; //we don't add an operation after another operation
         } else {
-            //if (userInput->toPlainText().back() == order.front())
-                //return; //we don't add A B C D E F G or H behind our zero unless it is in a number, we add only + - × or ÷ //FIXME
+            if (userInput->toPlainText().back() == order.front()){
+                if (userInput->toPlainText().size() == 1)
+                    return; //we dont add a zero behind another zero at the beginning of expression
+                if ((userInput->toPlainText().at(userInput->toPlainText().size() - 2) == "+") || \
+                    (userInput->toPlainText().at(userInput->toPlainText().size() - 2) == "-") || \
+                    (userInput->toPlainText().at(userInput->toPlainText().size() - 2) == "×") || \
+                    (userInput->toPlainText().at(userInput->toPlainText().size() - 2) == "÷") )
+               return;  //we don't add digits behind our zero unless it is in a number, we add only + - × or ÷
+            }
         }
         userInput->setPlainText(userInput->toPlainText() + symbol); //if all clear - add the symbol to the end of expression
     }
@@ -559,6 +634,11 @@ void MainWindow::removeLastSymbol() {
     setExpression(userInput, userInput->toPlainText().chopped(1));
     if (userInput->toPlainText().size() == 0)
         setExpression(userInput, "Enter the expression...");
+    //if after the removal there is no division by zero => remove error message.
+    if (!userInput->toPlainText().contains(QString("÷") + order.front())){
+        answer->setPlainText("=");
+        return;
+    }
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

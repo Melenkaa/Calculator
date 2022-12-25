@@ -23,7 +23,8 @@ private:
     Table* add = nullptr;
     Table* mult = nullptr;
     Table* sub = nullptr;
-//---------------------------------------Members----------------------------------------
+    bool divideWithRemainder = false;
+//---------------------------------------Methods----------------------------------------
     void setRule();
     void launchCalculator();
     QChar calculateMultCarry(int first, int second);
@@ -32,6 +33,8 @@ private:
     QString addTwo(const QString& firstAdd, const QString& secondAdd); //returns result of firstAdd + secondAdd
     QString substractTwo(const QString& firstSub, const QString& secondSub); //returns result of firstSub - secondSub
     QString multResult(const QString& expression); //parameter - expression, ex: "FBG×AAC×HBG". Returns the result of whole multiplication
+    QString multiply(const QString& firstM, const QString& secondM);
+    QString divide(const QString& dividend, const QString& divider);
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
